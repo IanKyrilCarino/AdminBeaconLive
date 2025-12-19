@@ -817,25 +817,42 @@ let stagedAvatarFile = null;
 // 1. Sync User Profile (Header & Sidebar)
 async function internalSyncUserProfile() {
     if (!window.supabase) return;
+    
+    // Get the current session
     const { data: { session }, error } = await supabase.auth.getSession();
 
     const headerName = document.getElementById("adminName");
     const headerImg = document.getElementById("adminProfile");
     const dropdownEmail = document.querySelector("#profileDropdown p.text-gray-500");
 
+    // === AUTH GUARD: REDIRECT IF NOT LOGGED IN ===
     if (error || !session) {
+        // Only redirect if we are NOT already on the login page
+        if (!window.location.pathname.includes('login.html')) {
+            window.location.replace('login.html'); 
+            return;
+        }
+
+        // If we are on the login page (or Guest mode is allowed), show GUEST
         if (headerName) headerName.textContent = "GUEST";
         return;
     }
+    // =============================================
 
+    // If logged in, load profile data
     const user = session.user;
-    const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
 
     const firstName = profile?.first_name || '';
     const lastName = profile?.last_name || '';
     const displayName = firstName ? `${firstName} ${lastName}` : user.email.split('@')[0];
     const avatarUrl = profile?.profile_picture || "https://via.placeholder.com/150";
 
+    // Update UI elements
     if (headerName) headerName.textContent = displayName.toUpperCase();
     if (headerImg) headerImg.src = avatarUrl;
     if (dropdownEmail) dropdownEmail.textContent = user.email;
