@@ -197,7 +197,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function loadAndAggregateFeederData() {
     const feederAggregates = {};
     for (let i = 1; i <= 14; i++) {
-      feederAggregates[i] = { reports: [], status: "Completed", reportCount: 0 };
+      feederAggregates[i] = { reports: [], status: "Completed", reportCount: 0, urgentCount: 0 };
     }
 
     // Since allReports is strictly PENDING, just iterate it
@@ -205,6 +205,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (feederAggregates[report.feeder]) {
         feederAggregates[report.feeder].reports.push(report);
         feederAggregates[report.feeder].reportCount++;
+
+        if (report.is_urgent) {
+          feederAggregates[report.feeder].urgentCount++;
+        }
       }
     });
 
@@ -231,6 +235,7 @@ document.addEventListener("DOMContentLoaded", () => {
             causes: {},
             status: "PENDING",
             coordinates: null,
+            isUrgent: false,
             // Store IDs for easier bulk selection later if needed
             ids: [] 
           };
@@ -239,6 +244,11 @@ document.addEventListener("DOMContentLoaded", () => {
         group.reports.push(report);
         group.ids.push(report.id);
         group.totalVolume += report.volume || 0;
+
+        if (report.is_urgent) {
+          group.isUrgent = true;
+        }
+
         const cause = report.cause || "Undetermined";
         group.causes[cause] = (group.causes[cause] || 0) + 1;
 
@@ -248,13 +258,13 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       
       return Object.values(barangayGroups).map(group => {
-      let commonCause = "N/A";
-      let maxCount = 0;
-      Object.entries(group.causes).forEach(([cause, count]) => {
-        if (count > maxCount) {
-          commonCause = cause;
-          maxCount = count;
-        }
+        let commonCause = "N/A";
+        let maxCount = 0;
+        Object.entries(group.causes).forEach(([cause, count]) => {
+          if (count > maxCount) {
+            commonCause = cause;
+            maxCount = count;
+          }
       });
       return {
         id: group.barangay, // Using Barangay Name as ID for the row in grouping view
@@ -263,7 +273,8 @@ document.addEventListener("DOMContentLoaded", () => {
         commonCause: commonCause,
         status: "PENDING",
         reportCount: group.reports.length,
-        coordinates: group.coordinates
+        coordinates: group.coordinates,
+        isUrgent: group.isUrgent
       };
     });
   }
@@ -377,12 +388,20 @@ document.addEventListener("DOMContentLoaded", () => {
     let tilesHTML = "";
 
     for (let feederId = 1; feederId <= 14; feederId++) {
-      const data = allFeederData[feederId] || { reportCount: 0 };
+      const data = allFeederData[feederId] || { reportCount: 0, urgentCount: 0 };
       const count = data.reportCount;
+      const urgentCount = data.urgentCount;
       const hasOutages = count > 0;
 
       const statusColor = hasOutages ? 'bg-red-500' : 'bg-blue-500';
       const hoverColor = hasOutages ? 'group-hover:bg-red-600' : 'group-hover:bg-blue-600';
+
+      const urgentBadge = urgentCount > 0 
+      ? `<div class="px-2 py-1 rounded-lg bg-red-600 text-white text-[10px] font-black flex items-center gap-1 animate-pulse shadow-sm">
+          <span class="material-icons text-[12px]">priority_high</span>
+          ${urgentCount} URGENT
+        </div>` 
+      : '';
       
       const badgeStyle = hasOutages 
         ? 'bg-red-50 text-red-600 border-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/30' 
@@ -409,9 +428,12 @@ document.addEventListener("DOMContentLoaded", () => {
                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Substation Area</p>
                    <h3 class="text-2xl font-bold text-gray-800 dark:text-white tracking-tight">Feeder ${feederId}</h3>
                 </div>
-                
-                <div class="w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-700/50 flex items-center justify-center text-gray-400 ${hoverColor} group-hover:text-white transition-all duration-300 shadow-inner">
-                   <span class="material-icons">bolt</span>
+
+                <div class="flex flex-col items-end gap-2">
+                  <div class="w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-700/50 flex items-center justify-center text-gray-400 ${hoverColor} group-hover:text-white transition-all duration-300 shadow-inner">
+                      <span class="material-icons">bolt</span>
+                  </div>
+                  ${urgentBadge}
                 </div>
              </div>
 
@@ -505,13 +527,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const isSelected = selectedItems.has(group.id);
     const coordsText = group.coordinates || 'Undetermined';
 
+    const rowBackgroundClass = group.isUrgent 
+      ? 'bg-red-100 dark:bg-red-400/20 hover:bg-red-100 dark:hover:bg-red-400/30' 
+      : 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
+
     return `
-      <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+      <tr class="${rowBackgroundClass} transition-colors duration-150">
         <td class="py-3 px-4">
           <input type="checkbox" class="report-checkbox h-4 w-4 text-blue-600 rounded-full focus:ring-blue-500 border-gray-300"
                  data-id="${group.id}" ${isSelected ? 'checked' : ''}>
         </td>
-        <td class="py-3 px-4 font-medium">${group.barangay}</td>
+        <td class="py-3 px-4 font-medium flex items-center space-x-2">
+          ${group.isUrgent ? `<span class="text-red-600 material-icons text-sm" title="Contains Urgent Reports">priority_high</span>` : ''}
+          <span>${group.barangay}</span>
+        </td>
         <td class="py-3 px-4">${group.reportCount}</td>
         <td class="py-3 px-4 truncate max-w-xs" title="${group.commonCause}">${group.commonCause}</td>
         <td class="py-3 px-4">
@@ -547,18 +576,26 @@ document.addEventListener("DOMContentLoaded", () => {
     const coordsText = hasCoords ? `${report.latitude.toFixed(4)}, ${report.longitude.toFixed(4)}` : 'N/A';
     
     const showContact = report.contact_permission && report.contact_number;
+    const isUrgent = report.is_urgent;
+
+    const rowBackgroundClass = isUrgent 
+        ? 'bg-red-100 dark:bg-red-400/20 hover:bg-red-100 dark:hover:bg-red-400/30' 
+        : 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
 
     let category = "Neutral";
     if (report.sentiment_score > 25) category = "Positive";
     else if (report.sentiment_score < -25) category = "Negative";
 
     return `
-      <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+      <tr class="${rowBackgroundClass} transition-colors duration-150">
         <td class="py-3 px-4">
           <input type="checkbox" class="report-checkbox h-4 w-4 text-blue-600 rounded-full focus:ring-blue-500 border-gray-300"
                  data-id="${report.id}" ${isSelected ? 'checked' : ''}>
         </td>
-        <td class="py-3 px-4 font-medium">${report.id.substring(0, 8)}...</td>
+        <td class="py-3 px-4 font-medium flex items-center space-x-2">
+            ${isUrgent ? `<span class="text-red-600 material-icons text-sm" title="Urgent">priority_high</span>` : ''}
+            <span>${report.id.substring(0, 8)}...</span>
+        </td>
         <td class="py-3 px-4">${reportDate}</td>
         <td class="py-3 px-4 truncate max-w-xs" title="${report.description}">${report.description}</td>
         <td class="py-3 px-4">
