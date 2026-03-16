@@ -79,22 +79,19 @@ document.addEventListener("DOMContentLoaded", () => {
     async function fetchOutages() {
         try {
             if(originalContainer.innerHTML === "") {
-                 originalContainer.innerHTML = '<div class="p-10 text-center text-gray-400">Loading outages...</div>';
+                    originalContainer.innerHTML = '<div class="p-10 text-center text-gray-400">Loading outages...</div>';
             }
-
             const { data, error } = await supabase
                 .from('announcements')
                 .select(`*, announcement_images ( image_url )`);
 
             if (error) throw error;
-
+            
             allOutages = data.map(item => {
-                 const newImgs = item.announcement_images ? item.announcement_images.map(i => i.image_url) : [];
-                 const oldImgs = Array.isArray(item.pictures) ? item.pictures : [];
-                 return { ...item, images: [...new Set([...newImgs, ...oldImgs])] };
+                    const newImgs = item.announcement_images ? item.announcement_images.map(i => i.image_url) : [];
+                    const oldImgs = Array.isArray(item.pictures) ? item.pictures : [];
+                    return { ...item, images: [...new Set([...newImgs, ...oldImgs])] };
             }) || [];
-
-            // Sort: Newest Updated/Created first
             allOutages.sort((a, b) => {
                 const dateA = new Date(a.updated_at || a.created_at);
                 const dateB = new Date(b.updated_at || b.created_at);
@@ -102,7 +99,6 @@ document.addEventListener("DOMContentLoaded", () => {
             });
 
             renderOutages();
-
         } catch (err) {
             console.error("Error fetching outages:", err);
         }
