@@ -129,7 +129,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     try {
-      // 1. Fetch from 'reports' and join related tables
       const { data, error } = await supabase
         .from('reports')
         .select(`
@@ -143,13 +142,10 @@ document.addEventListener("DOMContentLoaded", () => {
         throw error;
       }
       
-      // 2. Transform AND Filter immediately
       allReports = (data || [])
         .map(r => {
-          // Helper to capitalize status
           const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : 'Unknown';
           
-          // Normalize Status
           let rawStatus = r.status ? r.status.toLowerCase() : 'unknown';
           let processedStatus = rawStatus === 'pending' ? 'PENDING' : capitalize(r.status);
 
@@ -170,8 +166,6 @@ document.addEventListener("DOMContentLoaded", () => {
             images: images
           };
         })
-        // CRITICAL FIX: Strict filter. Only keep PENDING reports in memory for this page.
-        // This ensures no duplication and that completed reports vanish immediately.
         .filter(r => r.status === 'PENDING');
 
       console.log(`Loaded ${allReports.length} PENDING reports.`);
