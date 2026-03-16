@@ -58,6 +58,44 @@ document.addEventListener("DOMContentLoaded", () => {
   let barangayForecastInstance = null;
   let restorationForecastInstance = null;
 
+  const reportSections = [
+    { id: "feederCount", label: "Outages by Feeder", instance: () => feederChartInstance },
+    { id: "feederTime", label: "Avg Restoration Time", instance: () => restorationChartInstance },
+    { id: "rootCause", label: "Root Cause Analysis", instance: () => rootCauseInstance },
+    { id: "barangay", label: "Barangay Impact", instance: () => barangayImpactInstance },
+    { id: "peak", label: "Peak Outage Times", instance: () => peakTimeInstance },
+    { id: "sentiment", label: "Sentiment Analysis", instance: () => sentimentDataForPDF },
+    { id: "feederForecast", label: "Feeder Risk Forecast", instance: () => feederForecastInstance },
+    { id: "barangayForecast", label: "Barangay Risk Forecast", instance: () => barangayForecastInstance },
+    { id: "restorationForecast", label: "Restoration Likelihood", instance: () => restorationForecastInstance }
+  ];
+
+  function populateSelectionModal() {
+    const listContainer = document.getElementById("selectionList");
+    if (!listContainer) return;
+
+    listContainer.innerHTML = ""; // Clear existing
+    reportSections.forEach(section => {
+        const div = document.createElement("div");
+        div.className = "flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-xl transition-colors cursor-pointer";
+        div.innerHTML = `
+            <input type="checkbox" id="chk-${section.id}" value="${section.id}" checked 
+                   class="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
+            <label for="chk-${section.id}" class="ml-3 text-sm font-medium text-gray-700 dark:text-gray-200 cursor-pointer flex-1">
+                ${section.label}
+            </label>
+        `;
+        // Make the whole row clickable
+        div.onclick = (e) => {
+            if (e.target.tagName !== 'INPUT') {
+                const chk = div.querySelector('input');
+                chk.checked = !chk.checked;
+            }
+        };
+        listContainer.appendChild(div);
+    });
+}
+
   // --- DOM Elements ---
   const pieCanvas = document.getElementById("feederChartCanvas");
   const barCanvas = document.getElementById("restorationChartCanvas");
@@ -1500,7 +1538,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return "Data visualization available in chart.";
   }
 
-  async function generatePDFObject() {
+  async function generatePDFObject(selectedIds = []) {
     const jsPDF = window.jspdf.jsPDF;
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -1628,20 +1666,20 @@ document.addEventListener("DOMContentLoaded", () => {
     doc.text(String(cTrend), margin + boxWidth * 2 + 20, yPos + 18);
     yPos += 35;
 
-    const allCharts = [
+    const chartsToInclude = [
       { title: "2. Outages by Feeder", instance: feederChartInstance, type: "feederCount" },
-      { title: "3. Avg Restoration Time by Feeder", instance: restorationChartInstance, type: "feederTime" },
+      { title: "3. Avg Restoration Time", instance: restorationChartInstance, type: "feederTime" },
       { title: "4. Root Cause Analysis", instance: rootCauseInstance, type: "rootCause" },
       { title: "5. Most Affected Barangays", instance: barangayImpactInstance, type: "barangay" },
       { title: "6. Peak Outage Times", instance: peakTimeInstance, type: "peak" },
-      { title: "7. Root Cause Sentiment Analysis", instance: sentimentDataForPDF, type: "sentiment" },
-      { title: "8. Feeder Risk Forecast (Next 7 Days)", instance: feederForecastInstance, type: "feederForecast" },
-      { title: "9. Barangay Risk Forecast (Next 7 Days)", instance: barangayForecastInstance, type: "barangayForecast" },
+      { title: "7. Sentiment Analysis", instance: sentimentDataForPDF, type: "sentiment" },
+      { title: "8. Feeder Risk Forecast", instance: feederForecastInstance, type: "feederForecast" },
+      { title: "9. Barangay Risk Forecast", instance: barangayForecastInstance, type: "barangayForecast" },
       { title: "10. Restoration Likelihood", instance: restorationForecastInstance, type: "restorationForecast" },
-    ];
+    ].filter(item => selectedIds.includes(item.type));
 
     doc.setTextColor(0);
-    allCharts.forEach((item) => {
+    chartsToInclude.forEach((item) => {
       if (item.type === "sentiment") {
         if (!item.instance || item.instance.length === 0) return;
 
@@ -1766,7 +1804,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return doc;
   }
 
-  async function handlePreviewOpen() {
+  async function handlePreviewOpen(selectedIds) {
     const modal = document.getElementById("pdfPreviewModal");
     const iframe = document.getElementById("pdfPreviewFrame");
     const loading = document.getElementById("pdfLoading");
@@ -1777,7 +1815,7 @@ document.addEventListener("DOMContentLoaded", () => {
     iframe.classList.add("hidden");
     loading.classList.remove("hidden");
 
-    currentPDFDoc = await generatePDFObject();
+    currentPDFDoc = await generatePDFObject(selectedIds);
     const pdfBlob = currentPDFDoc.output("bloburl");
     iframe.src = pdfBlob;
 
@@ -1803,12 +1841,63 @@ document.addEventListener("DOMContentLoaded", () => {
     handlePreviewClose();
   }
 
-  const triggerBtn = document.getElementById("downloadReportBtn");
+  const downloadBtn = document.getElementById("downloadReportBtn");
+  const selectionModal = document.getElementById("reportSelectionModal");
+  const proceedBtn = document.getElementById("proceedToPreview");
+  // const triggerBtn = document.getElementById("downloadReportBtn");
   const closeBtn = document.getElementById("closePreviewBtn");
   const cancelBtn = document.getElementById("cancelPreviewBtn");
   const confirmBtn = document.getElementById("confirmDownloadBtn");
+  const closeSelectionBtn = document.getElementById("closeSelectionBtn");
+  const selectAllBtn = document.getElementById("selectAllCharts");
 
-  if (triggerBtn) triggerBtn.addEventListener("click", handlePreviewOpen);
+  if (downloadBtn) {
+    downloadBtn.addEventListener("click", () => {
+      populateSelectionModal();
+      selectionModal.classList.remove("hidden");
+      selectionModal.classList.add("flex");
+      if (selectAllBtn) selectAllBtn.textContent = "Unselect All";
+    });
+  }
+
+  if (closeSelectionBtn) {
+    closeSelectionBtn.addEventListener("click", () => {
+      selectionModal.classList.add("hidden");
+      selectionModal.classList.remove("flex");
+    });
+  }
+
+  if (selectAllBtn) {
+    selectAllBtn.addEventListener("click", () => {
+      const checkboxes = document.querySelectorAll("#selectionList input[type='checkbox']");
+      const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+
+      checkboxes.forEach(cb => {
+        cb.checked = !allChecked;
+      });
+
+      selectAllBtn.textContent = allChecked ? "Select All" : "Unselect All";
+    });
+  }
+
+  if (proceedBtn) {
+    proceedBtn.addEventListener("click", async () => {
+      const selectedIds = Array.from(document.querySelectorAll("#selectionList input:checked"))
+                              .map(input => input.value);
+      
+      if (selectedIds.length === 0) {
+          alert("Please select at least one section to include in the report.");
+          return;
+      }
+
+      selectionModal.classList.add("hidden");
+      selectionModal.classList.remove("flex");
+      
+      await handlePreviewOpen(selectedIds); 
+    });
+  }
+
+  // if (triggerBtn) triggerBtn.addEventListener("click", handlePreviewOpen);
   if (closeBtn) closeBtn.addEventListener("click", handlePreviewClose);
   if (cancelBtn) cancelBtn.addEventListener("click", handlePreviewClose);
   if (confirmBtn) confirmBtn.addEventListener("click", handleDownload);
